@@ -1,0 +1,149 @@
+#! /usr/bin/env python2.7
+'''
+2015
+@author: Robert Shelansky
+Description:
+
+'''
+import sys
+import collections
+import argparse
+import re
+
+from Bio import SeqIO
+
+
+def main(args):
+    """
+    Does All the grunt work
+    """
+    opts = parse_args()
+    code=collections.Counter()
+    tbases=0
+    ori = ", ".join(opts.find)
+    lengths = []
+    for i in range(len(opts.find)):
+	lengths.append(len(opts.find[i]))
+        opts.find[i] =  set(degenerate(opts.find[i]))
+
+    #print "#MOTIFS: {}".format(ori)
+    #print "#SEPERATIONS: {}".format(opts.seperation)
+
+    #print "#DEGENERATE: {}".format(opts.find)
+       #opts.find = set((frozenset(x) for x in opts.find))
+    counter=0
+    r=0
+    for i,record in enumerate(SeqIO.parse(opts.infile,"fasta")):
+        tbases+=len(record.seq)
+        r+=1
+     	if not opts.reverse_compliment:
+	    record = str(record.seq).upper()
+        else:
+            record = str(record.seq.reverse_complement()).upper()
+        
+        if find_motif(record,opts.find,lengths,opts.seperation):
+            counter+=1
+        
+        #http://users.soe.ucsc.edu/~karplus/bme205
+        
+    sys.stderr.write("Read: {} records and {} bases.\n".format(r,tbases))     
+    #if not opts.non_code:
+    #    print "#Code"
+    #else:
+    #    print "#None Code"
+
+    print counter
+    #print "#Fasta records: {}".format(i+1)
+    #print "#Total Bases: {}".format(tbases)
+    #print "#KMER\tCOUNT\tCOUNT/GENE\tCOUNT/WINDOW" 
+    #print "\n".join(["{}\t{}\t{}\t{}"\
+    #        .format(x[0],x[1],\
+    #        x[1]/float(i+1),\
+    #        x[1]/float(tbases-len(x[0])+1))\
+    #    for x in code.items()])
+
+def find_motif(record,motifs,lengths,seps):
+   r=collections.defaultdict(lambda:[])
+   for i in range(len(motifs)):
+	k=lengths[i]
+	for start in range(len(record) -k + 1):
+		if record[start:start + k] in motifs[i]:
+			r[i].append([start,start+k])
+			
+   for i in range(len(motifs)-1):
+	for y in reversed(range(len(r[i+1]))):
+		for x in range(len(r[i])):           
+			dist= r[i+1][y][0]-r[i][x][1]
+			if dist < seps[i][1] and dist > seps[i][0]:
+				return("MOTIF FOUND: "+str(r[i][x][1]),str(r[i+1][y][0]))
+                   
+#for k in kmers:
+#for start in range(len(record) - k + 1):
+#if record[start:start + k] in opts.find:
+#code[record[start:start + k]] +=1
+
+
+
+def degenerate(word):
+   d=[word] #of degenerates formed from word 
+   deg={'W':['A','T'],'S':['C','G'],'M':['A','C'],'K':['G','T']\
+       ,'R':['A','G'],'Y':['C','T'],'B':['C','G','T']\
+       ,'D':['A','G','T'],'H':['A','C','T'],'V':['A','C','G']\
+       ,'N':['A','T','G','C']}
+   for i in range(len(word)):
+       if word[i] in deg:
+           n=list()
+           for word in d:
+               n+=[word.replace(word[i],x,1) for x in deg[word[i]]]
+           d=n
+   return d
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=\
+"""
+""")
+
+    parser.add_argument("-i", "--infile",type = str,default=sys.stdin,help= "Fasta Files To be Included in Analasys.")
+    parser.add_argument("-f","--find",nargs='*',default = [])
+    parser.add_argument("-s","--seperation",nargs='*',default=[])
+    parser.add_argument("-r","--reverse_compliment",action='store_true')
+
+    args = parser.parse_args()
+    #require at least on motif
+    if len(args.find) ==0:
+        parser.error('Must Have At Least 1 KMER To Search.')
+    #require each motif be seperated by a distance X
+    if len(args.seperation) != len(args.find) - 1:
+        parser.error(\
+            'Motifs Must Be Seperated by some distance "(,)"')
+    if args.seperation:
+        try:         
+            for i in range(len(args.seperation)):
+                args.seperation[i]=args.seperation[i]\
+                    .replace('(','-').replace(')','-').split('-')
+                args.seperation[i]= (int(args.seperation[i][1])\
+                                    ,int(args.seperation[i][2]))
+        except:
+            parser.error(\
+                "Seperation Format Incorrect: '(10-100)' '(1-50)'")
+    
+    #require all serched sequences to be UPPER case
+    if args.find:
+        for i in range(len(args.find)):
+            args.find[i]= args.find[i].upper()    
+    return args
+
+
+
+
+
+
+
+#MAKE COMMAND LINE RUNNABLE
+if __name__ == "__main__" :
+    try:
+        sys.exit(main(sys.argv))
+    except EnvironmentError as (errno,strerr):
+        sys.stderr.write("ERROR: " + strerr + "\n")
+        sys.exit(errno)
+

@@ -1,0 +1,122 @@
+#! /usr/bin/env python2.7
+'''
+2012
+@author: Shelansky
+'''
+import sys
+import argparse
+from Bio import SeqIO as fasta
+import random as rd
+import os.path as path
+
+def main(argv):
+    opts = parse_args(argv)
+    opts.perror = 0
+    opts.rerror = 0
+    rd.seed()
+    seqs=[]
+    recs=[]
+    file = sys.stdout
+    for rec in parse_fasta(opts.fasta,opts):
+        if len(rec.seq) > 2:
+           recs.append(rec)   
+           seq=reverse_compliment(rec.seq,opts)
+           orf=orf_prep(str(seq).upper(),opts)
+           seqs.append(orf)
+        
+    #Permute a genome for each trial
+    sys.stderr.write("{}:{}:{}...\n".\
+        format(argv[0],opts.fasta.name,opts.basename))
+    for j,seq in enumerate(permute_genome(seqs,opts)):
+        file.write(">{}\tPermutedTrial={}\tLength={}\n{}\n"\
+            .format(recs[j].id,opts.basename,\
+                len(seq)*3,"".join(seq)))
+    if opts.verbose:
+        sys.stderr.write("permute errors:{}\nread errors:{}\n"\
+            .format(opts.perror,opts.rerror))
+
+
+
+
+
+#returns a generater of permuted gene sequences.
+def permute_genome(genes,opts):
+    for gene in genes:
+        #sys.stderr.write("{},{},{}\n".format(len(gene)%3,len(gene),gene))
+        seq = gene[1:len(gene)-1] 
+        __permute(seq,opts) 
+        seq.insert(0,gene[0])
+        #appends the first codon to the begining
+        seq.append(gene[-1])
+        #appends the last  codon to the end
+        yield seq
+def __permute(l,opts):
+    """MAX SIZE OF RANDOM INTEGER RANGE TO GENERATE
+ALL POSSIBLE PERMS is 2080"""
+    MAX_RAND_SIZE = 2080 
+    if (len(l)/3 < MAX_RAND_SIZE):  
+        rd.shuffle(l)
+    else:
+        sys.stderr.write(\
+		"{}:{}: Valid Random Permutation Range Exceeded."\
+		.format(opts.progname,permute.__name__))
+        opts.perror+=1
+
+def reverse_compliment(seq,opts):
+    if opts.reverse_compliment:
+        return seq.reverse_complement()
+    else:
+        return seq
+def orf_prep(seq,opts):
+    if not opts.orfs:
+        return [seq[j:j+3] for j in range(0,len(seq)) if j%3==0]
+    else:
+        if len(seq)%3==0:
+            return [seq[j:j+3]\
+                for j in range(0,len(seq)) if j%3==0]
+        else:
+            seq = seq[0:-(len(seq)%3)]
+            return [seq[j:j+3]\
+                for j in range(0,len(seq)) if j%3==0]
+
+##Using bioptyon fasta parser, parse fasta files and check for mod 3.
+def parse_fasta(file,opts):
+    for i,rec in enumerate(fasta.parse(file,"fasta")):
+        seq = str(rec.seq).upper()
+        if (not opts.orfs) or len(seq)%3 is 0:
+             yield rec
+        else:
+            if opts.verbose:
+                sys.stderr.write(\
+                    "{}:{}:{}:Record:{}:Improper ORF.\n"\
+                    .format(opts.progname,path.basename(file.name),\
+                    rec.id,i+1))
+            opts.rerror+=1
+           
+
+
+
+def parse_args(argv):
+    """
+    Parses command Line arguments: 
+    """
+    parser = argparse.ArgumentParser(description= "")
+    parser.add_argument("-f","--fasta",\
+        type=argparse.FileType('r'), default=sys.stdin)
+    parser.add_argument("-b","--basename",type=str,default="None")
+    parser.add_argument("-o","--orfs",action='store_true')
+    parser.add_argument("-v","--verbose",action='store_true')
+    parser.add_argument("-r","--reverse_compliment",action='store_true')
+    args=parser.parse_args()
+    args.progname=path.basename(argv[0])
+    return args
+
+#COMMAND LINE RUNNABLE
+if __name__ == "__main__" :
+    try:
+        sys.exit(main(sys.argv))
+        
+    except EnvironmentError as (errno,strerr):
+        sys.stderr.write("ERROR: " + strerr + "\n")
+        sys.exit(errno)
+
