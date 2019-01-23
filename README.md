@@ -14,7 +14,8 @@ https://www.biorxiv.org/content/early/2019/01/09/515197
 2. /data describes how the curated "intronless" ORF set was created. 
 
 Initital Rendition of figure 3 with reversed colors...:(. Glad I caught that.
-<img src="files/Error.png">
+![png](shuffler_files/Error.png)
+
 
 
 ```python
